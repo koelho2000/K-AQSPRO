@@ -69,6 +69,9 @@ export interface System {
   equipments: Equipment[];
   storage: Storage;
   name: string;
+  description?: string;
+  hasMixingValve?: boolean;
+  hasStorage?: boolean; // New property to enable/disable accumulation
 }
 
 export type BudgetChapter = 
@@ -105,6 +108,7 @@ export interface HourlySimResult {
   hour: number;
   dayOfWeek: number;
   demand_kWh: number;
+  demand_L: number;
   temp_tank: number;
   consumed_elec_kWh: number;
   consumed_gas_kWh: number;

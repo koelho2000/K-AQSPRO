@@ -10,20 +10,22 @@ export function runSimulation(project: Project, system: System): HourlySimResult
   
   // Initial state
   let currentTemp = 45; // Start temp in tank
-  const tankMass = system.storage.volume || 1; // Assuming 1L = 1kg
+  const isInstantaneous = system.hasStorage === false;
+  // If instantaneous, we assume a very small thermal mass (1L) to simulate immediate heating response
+  const tankMass = isInstantaneous ? 1 : (system.storage.volume || 1); 
   
   // 8760 hours loop
   for (let h = 0; h < 8760; h++) {
     const dayOfYear = Math.floor(h / 24);
     const month = Math.floor(dayOfYear / 30.42); // Rough month
     const hourOfDay = h % 24;
-    const dayOfWeek = dayOfYear % 7; // 0=Sunday if we assume start of year is Sunday
+    const dayOfWeek = dayOfYear % 7; 
     
     const ambientData = climate[Math.min(month, 11)];
     const t_ambient = ambientData.temp;
     const t_cold_water = 15; // Assumption
 
-    // 1. Demand Calculation (Weekly schedule check)
+    // 1. Demand Calculation
     let hourlyDemand_L = 0;
     let weightedTempSum = 0;
     project.activities.forEach(act => {
@@ -36,12 +38,16 @@ export function runSimulation(project: Project, system: System): HourlySimResult
     });
     
     const t_required = hourlyDemand_L > 0 ? weightedTempSum / hourlyDemand_L : 40;
-    const q_demand_kWh = (hourlyDemand_L * CP_WATER * (t_required - t_cold_water)) / 1000;
+    
+    // For instantaneous, delivery temp is target if there's power, else ambient/cold
+    const t_delivered = system.hasMixingValve ? t_required : Math.max(t_required, currentTemp * 0.9); 
 
-    // 2. Solar Gain
+    const q_demand_kWh = (hourlyDemand_L * CP_WATER * (t_delivered - t_cold_water)) / 1000;
+
+    // 2. Solar Gain (Usually only applies with storage, but kept for general physics)
     let q_solar_kWh = 0;
     const solar = system.equipments.find(e => e.type === 'SOLAR');
-    if (solar && solar.area) {
+    if (solar && solar.area && !isInstantaneous) {
       const hourEffect = Math.max(0, Math.sin((hourOfDay - 6) * Math.PI / 12));
       q_solar_kWh = ambientData.radiation * solar.area * (solar.opticalEfficiency || 0.7) * hourEffect / 12;
     }
@@ -51,19 +57,18 @@ export function runSimulation(project: Project, system: System): HourlySimResult
     let elec_cons = 0;
     let gas_cons = 0;
     
-    // Aggregate total available thermal power from all equipments (except solar)
     const totalThermalPowerkW = system.equipments
       .filter(e => e.type !== 'SOLAR')
       .reduce((acc, e) => acc + (e.power || 0), 0);
 
-    // Simple control logic: if tank is below setpoint (T_required + deadband), turn on heat
-    const setpoint = Math.max(t_required + 5, 45); // deadband of 5 deg, min 45 deg
-    if (currentTemp < setpoint) {
-      // Use full power available or what is needed to reach setpoint in 1h
+    const minMaintainTemp = system.hasMixingValve ? 55 : 45;
+    const setpoint = Math.max(t_required + 5, minMaintainTemp);
+    
+    // Logic for heating
+    if (currentTemp < setpoint || (isInstantaneous && hourlyDemand_L > 0)) {
       const energyNeededToSetpoint = (tankMass * CP_WATER * (setpoint - currentTemp)) / 1000;
       q_input_kWh = Math.min(totalThermalPowerkW, energyNeededToSetpoint + q_demand_kWh);
 
-      // Distribute consumption among equipments (Priority: HP -> Electric Tank -> Boiler -> Heater)
       let remainingHeat = q_input_kWh;
       
       const sortPriority = { 'HP': 1, 'ELECTRIC_TANK': 2, 'BOILER': 3, 'HEATER': 4, 'SOLAR': 5 };
@@ -85,8 +90,8 @@ export function runSimulation(project: Project, system: System): HourlySimResult
       }
     }
 
-    // 4. Heat Losses
-    const q_loss_kWh = (system.storage.lossFactor * (currentTemp - t_ambient)) / 1000;
+    // 4. Heat Losses (Only if storage exists)
+    const q_loss_kWh = isInstantaneous ? 0 : (system.storage.lossFactor * (currentTemp - t_ambient)) / 1000;
 
     // 5. Energy Balance
     const deltaE = q_input_kWh + q_solar_kWh - q_demand_kWh - q_loss_kWh;
@@ -100,6 +105,7 @@ export function runSimulation(project: Project, system: System): HourlySimResult
       hour: h,
       dayOfWeek,
       demand_kWh: q_demand_kWh,
+      demand_L: hourlyDemand_L,
       temp_tank: currentTemp,
       consumed_elec_kWh: elec_cons,
       consumed_gas_kWh: gas_cons,

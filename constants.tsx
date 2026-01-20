@@ -94,7 +94,9 @@ export const INITIAL_PROJECT: Project = {
     storage: { volume: 200, lossFactor: 1.5 },
     equipments: [
       { type: 'BOILER', name: 'Esquentador Gás', efficiency: 0.85 }
-    ]
+    ],
+    hasMixingValve: false,
+    hasStorage: true
   },
   proposedSystem: {
     name: 'Sistema Eficiente',
@@ -102,7 +104,9 @@ export const INITIAL_PROJECT: Project = {
     equipments: [
       { type: 'HP', name: 'Bomba de Calor', cop: 3.5, power: 2 },
       { type: 'SOLAR', name: 'Painéis Solares', area: 4, opticalEfficiency: 0.75 }
-    ]
+    ],
+    hasMixingValve: true,
+    hasStorage: true
   },
   budget: DEFAULT_BUDGET
 };
