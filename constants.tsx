@@ -87,8 +87,13 @@ export const PRESET_ACTIVITIES: Record<string, Activity[]> = {
 
 export const INITIAL_PROJECT: Project = {
   id: `PRJ-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-  admin: { installation: '', client: '', technician: '' },
-  company: { name: 'K-ENGINEERING SOLUTIONS', nif: '500 000 000', alvara: '00000-PUB', contacts: 'info@kengineering.pt' },
+  admin: { installation: '', client: '', technician: 'José Coelho' },
+  company: { 
+    name: 'KOELHO2000', 
+    nif: '500 000 000', 
+    alvara: '00000-PUB', 
+    contacts: 'koelho2000@gmail.com | 934021666' 
+  },
   energy: { electricity: 0.22, gas: 0.12, water: 2.5 },
   district: 'Lisboa',
   activities: PRESET_ACTIVITIES["Consumo Padrão"],

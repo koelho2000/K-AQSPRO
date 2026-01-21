@@ -5,9 +5,8 @@ import {
   Plus, Trash2, Database, ShieldCheck, Sun, Flame, Thermometer, Zap, 
   Info, CheckCircle2, AlertCircle, BarChart2, Activity,
   Maximize2, X, Gauge, Timer, Droplets, Sparkles, Scale, ToggleRight, ToggleLeft, ArrowRight, AlertTriangle, TextQuote, Lightbulb,
-  Zap as ZapIcon, Cpu, Clock, TrendingUp, PackageCheck, PackageX, ChevronRight, Award, Play, Pause, Calendar
+  Zap as ZapIcon, Cpu, Clock, TrendingUp, PackageCheck, PackageX, ChevronRight, Award, Play, Pause, Calendar, Wand2, ArrowUpRight
 } from 'lucide-react';
-// Added AreaChart to imports
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ComposedChart, Cell, Area, AreaChart, Legend
 } from 'recharts';
@@ -77,6 +76,7 @@ const PIDDiagram: React.FC<{ system: System, simState?: HourlySimResult, hourOfD
 
 const SystemPage: React.FC<SystemPageProps> = ({ systemType, project, setProject, results = [], isDirty, onRunSimulation }) => {
   const [showPID, setShowPID] = useState(false);
+  const [showOptimizer, setShowOptimizer] = useState(false);
   const [simHour, setSimHour] = useState(8); 
   const [chartTab, setChartTab] = useState<'daily' | 'weekly'>('daily');
 
@@ -89,7 +89,6 @@ const SystemPage: React.FC<SystemPageProps> = ({ systemType, project, setProject
 
   const weeklyResults = useMemo(() => {
     if (results.length === 0) return [];
-    // Slice a typical week (168h)
     return results.slice(168, 168 + 168).map((r, i) => ({
       ...r,
       hourIdx: i,
@@ -122,6 +121,34 @@ const SystemPage: React.FC<SystemPageProps> = ({ systemType, project, setProject
 
     return { failureHours, designSetpoint, peakLh, peakKW };
   }, [results, project.activities]);
+
+  // Optimization Logic
+  const optimization = useMemo(() => {
+    const dailyVol = project.activities.reduce((acc, a) => acc + a.volume, 0);
+    if (dailyVol === 0) return null;
+
+    const recStorage = Math.max(200, Math.ceil(dailyVol / 50) * 50);
+    const recSolarArea = Math.round((recStorage / 75) * 2) / 2; // 1m2 per 75L
+    
+    const energyNeeded = (dailyVol * CP_WATER * (technicalKPIs.designSetpoint - 15)) / 1000;
+    const recHPPower = Math.max(2, Math.round((energyNeeded / 6) * 2) / 2); // To recover in 6 hours
+
+    return { recStorage, recSolarArea, recHPPower, dailyVol };
+  }, [project.activities, technicalKPIs.designSetpoint]);
+
+  const applyOptimization = () => {
+    if (!optimization) return;
+    const newEquips = system.equipments.map(eq => {
+      if (eq.type === 'HP') return { ...eq, power: optimization.recHPPower };
+      if (eq.type === 'SOLAR') return { ...eq, area: optimization.recSolarArea };
+      return eq;
+    });
+    updateSystem({ 
+      storage: { ...system.storage, volume: optimization.recStorage },
+      equipments: newEquips
+    });
+    setShowOptimizer(false);
+  };
 
   const updateSystem = (updated: Partial<System>) => {
     setProject(prev => ({
@@ -165,6 +192,14 @@ const SystemPage: React.FC<SystemPageProps> = ({ systemType, project, setProject
           <p className="text-slate-500 font-medium">Dimensionamento e Especificação Técnica de Equipamentos.</p>
         </div>
         <div className="flex flex-wrap gap-3">
+          {systemType === 'proposed' && (
+            <button 
+              onClick={() => setShowOptimizer(true)} 
+              className="flex items-center gap-2 px-6 py-3 bg-orange-100 border border-orange-200 text-orange-700 rounded-xl text-sm font-bold shadow-sm hover:bg-orange-200 transition-all active:scale-95"
+            >
+              <Wand2 size={18} /> OTIMIZADOR SMART
+            </button>
+          )}
           <button onClick={() => setShowPID(true)} className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-800 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all active:scale-95"><Maximize2 size={18} className="text-orange-500"/> P&ID DINÂMICO</button>
           <button onClick={onRunSimulation} className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-xl text-sm font-black shadow-lg hover:bg-blue-500 transition-all active:scale-95"><Play size={18} fill="currentColor"/> EXECUTAR</button>
         </div>
@@ -225,6 +260,7 @@ const SystemPage: React.FC<SystemPageProps> = ({ systemType, project, setProject
                 {eq.type === 'SOLAR' ? <Sun size={28}/> : (eq.type === 'HP' ? <ZapIcon size={28}/> : <Flame size={28}/>)}
               </div>
               <div className="flex-1 space-y-4">
+                {/* Fixed: changed 'removeEquipment(index)' to 'removeEquipment(i)' to resolve undefined variable error */}
                 <div className="flex justify-between items-center"><input className="text-lg font-black text-slate-900 bg-transparent outline-none focus:text-orange-600 w-full uppercase" value={eq.name} onChange={(e) => updateEquipment(i, { name: e.target.value })} /><button onClick={() => removeEquipment(i)} className="p-2 text-slate-200 hover:text-red-500 transition-colors"><Trash2 size={20}/></button></div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {eq.type !== 'SOLAR' && (
@@ -366,6 +402,86 @@ const SystemPage: React.FC<SystemPageProps> = ({ systemType, project, setProject
                   <Legend verticalAlign="top" height={36} iconType="circle" />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showOptimizer && optimization && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in duration-300">
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+               <div className="flex items-center gap-3">
+                 <div className="p-2 bg-orange-500 rounded-xl text-white shadow-lg shadow-orange-500/20"><Wand2 size={24}/></div>
+                 <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Otimizador Inteligente de Dimensionamento</h3>
+               </div>
+               <button onClick={() => setShowOptimizer(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X size={24}/></button>
+            </div>
+            <div className="p-10 space-y-8">
+              <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Demanda Diária Analisada</p>
+                  <p className="text-3xl font-black text-blue-900">{optimization.dailyVol.toLocaleString('pt-PT')} L/dia</p>
+                </div>
+                <Droplets className="text-blue-200" size={48} />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-200 group hover:border-orange-500 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-orange-500 shadow-sm transition-colors"><Database size={24}/></div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase">Volume de Acumulação</p>
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-400 line-through text-sm font-bold">{system.storage.volume}L</span>
+                        <ArrowRight size={14} className="text-slate-300"/>
+                        <span className="text-xl font-black text-slate-800">{optimization.recStorage}L</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-[10px] font-black">RECOMENDADO</div>
+                </div>
+
+                <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-200 group hover:border-orange-500 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-orange-500 shadow-sm transition-colors"><Sun size={24}/></div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase">Área Coletora Solar</p>
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-400 line-through text-sm font-bold">{system.equipments.find(e=>e.type==='SOLAR')?.area || 0}m²</span>
+                        <ArrowRight size={14} className="text-slate-300"/>
+                        <span className="text-xl font-black text-slate-800">{optimization.recSolarArea}m²</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-[10px] font-black">OTIMIZADO</div>
+                </div>
+
+                <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-200 group hover:border-orange-500 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-orange-500 shadow-sm transition-colors"><ZapIcon size={24}/></div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase">Potência Bomba Calor</p>
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-400 line-through text-sm font-bold">{system.equipments.find(e=>e.type==='HP')?.power || 0}kW</span>
+                        <ArrowRight size={14} className="text-slate-300"/>
+                        <span className="text-xl font-black text-slate-800">{optimization.recHPPower}kW</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-[10px] font-black">ALTA PERFORMANCE</div>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <button onClick={() => setShowOptimizer(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase hover:bg-slate-200 transition-all active:scale-95">CANCELAR</button>
+                <button 
+                  onClick={applyOptimization} 
+                  className="flex-[2] py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase shadow-xl hover:bg-slate-800 transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  APLICAR DIMENSIONAMENTO <ArrowUpRight size={16}/>
+                </button>
+              </div>
             </div>
           </div>
         </div>
