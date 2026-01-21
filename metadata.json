@@ -1,5 +1,5 @@
 {
-  "name": "K-AQSPRO - AQS Engineering Suite",
+  "name": "K-AQSPRO",
   "description": "A high-end professional simulation and calculation tool for Sanitary Hot Water (AQS) systems, featuring hourly simulation (8760h), climate analysis, and financial feasibility studies.",
   "requestFramePermissions": []
 }
