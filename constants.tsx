@@ -71,6 +71,9 @@ export const DEFAULT_BUDGET: BudgetItem[] = [
 ];
 
 export const PRESET_ACTIVITIES: Record<string, Activity[]> = {
+  "Consumo Padrão": [
+    { id: '1', name: 'Consumo Diário', volume: 150, tempRequired: 45, hours: [7, 8, 12, 13, 20, 21], activeDays: [0, 1, 2, 3, 4, 5, 6] }
+  ],
   "Residencial T2 (3 pessoas)": [
     { id: '1', name: 'Duche Manhã', volume: 50, tempRequired: 40, hours: [7, 8], activeDays: [1, 2, 3, 4, 5] },
     { id: '2', name: 'Cozinha', volume: 15, tempRequired: 45, hours: [13, 20], activeDays: [0, 1, 2, 3, 4, 5, 6] },
@@ -88,12 +91,12 @@ export const INITIAL_PROJECT: Project = {
   company: { name: 'K-ENGINEERING SOLUTIONS', nif: '500 000 000', alvara: '00000-PUB', contacts: 'info@kengineering.pt' },
   energy: { electricity: 0.22, gas: 0.12, water: 2.5 },
   district: 'Lisboa',
-  activities: PRESET_ACTIVITIES["Residencial T2 (3 pessoas)"],
+  activities: PRESET_ACTIVITIES["Consumo Padrão"],
   existingSystem: {
     name: 'Sistema Base',
     storage: { volume: 200, lossFactor: 1.5 },
     equipments: [
-      { type: 'BOILER', name: 'Esquentador Gás', efficiency: 0.85 }
+      { type: 'BOILER', name: 'Esquentador Gás', efficiency: 0.85, power: 1 }
     ],
     hasMixingValve: false,
     hasStorage: true

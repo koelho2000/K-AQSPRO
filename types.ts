@@ -110,6 +110,8 @@ export interface HourlySimResult {
   demand_kWh: number;
   demand_L: number;
   temp_tank: number;
+  t_required: number;
+  t_delivered: number;
   consumed_elec_kWh: number;
   consumed_gas_kWh: number;
   solar_gain_kWh: number;
