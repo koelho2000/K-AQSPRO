@@ -1,6 +1,6 @@
 
 import React, { useRef, useMemo } from 'react';
-import { Project, HourlySimResult, Equipment, ModuleType } from '../types';
+import { Project, HourlySimResult, Equipment, ModuleType, System } from '../types';
 import { aggregateResults } from '../services/simulationEngine';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, LineChart, Line, Cell, PieChart, Pie, ComposedChart, Legend
@@ -8,7 +8,7 @@ import {
 import { 
   Printer, FileText, MapPin, Zap, Droplets, Sun, Flame, Wallet, Calculator, ShieldCheck, Building2, Database, Thermometer,
   Layout, TrendingDown, Award, Lock, Compass, Briefcase, Layers, BarChart3, Calendar, AlertTriangle, Scale, Info,
-  ChevronRight, TrendingUp, Activity, CheckCircle, Copy, FileCode, Download, CheckCircle2, User, Globe, Mail, Phone, Hash
+  ChevronRight, TrendingUp, Activity, CheckCircle, Copy, FileCode, Download, CheckCircle2, User, Globe, Mail, Phone, Hash, Zap as ZapIcon, Maximize2, ShieldAlert
 } from 'lucide-react';
 
 interface ReportPageProps {
@@ -16,6 +16,8 @@ interface ReportPageProps {
   baseResults: HourlySimResult[];
   propResults: HourlySimResult[];
 }
+
+const DAYS_REPORT = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 
 const EXPORT_STYLES = `
   <style>
@@ -39,18 +41,79 @@ const EXPORT_STYLES = `
     td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
     .text-orange { color: #f97316; }
     .text-blue { color: #2563eb; }
-    .bg-slate-900 { background: #0f172a; color: white; }
+    .bg-slate-900 { background: #0f172a !important; color: #ffffff !important; }
+    .bg-slate-900 * { color: #ffffff !important; }
+    .bg-orange-600 { background: #ea580c !important; color: #ffffff !important; }
+    .bg-orange-600 * { color: #ffffff !important; }
     .toc-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px dashed #e2e8f0; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #475569; }
     .k2000-seal { border: 4px double #f97316; padding: 20px; border-radius: 50%; width: 120px; height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
   </style>
 `;
+
+const PIDDiagram: React.FC<{ system: System, simState?: any }> = ({ system, simState }) => {
+  const tankTemp = simState?.temp_tank || 45;
+  const hasStorage = system.hasStorage !== false;
+  const hasValve = system.hasMixingValve;
+
+  const getTempColor = (temp: number) => {
+    if (temp > 55) return '#ef4444'; 
+    if (temp > 40) return '#f97316'; 
+    return '#3b82f6'; 
+  };
+
+  return (
+    <div className="relative w-full aspect-video bg-slate-50 rounded-[40px] border border-slate-200 overflow-hidden p-4 flex items-center justify-center shadow-inner">
+      <svg viewBox="0 0 800 500" className="w-full h-full drop-shadow-sm">
+        <defs>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e2e8f0" strokeWidth="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="800" height="500" fill="url(#grid)" />
+        
+        <path d="M 50 420 L 300 420" stroke="#3b82f6" strokeWidth="4" fill="none" />
+        <path d="M 375 100 L 375 60 L 500 60" stroke={getTempColor(tankTemp)} strokeWidth="4" fill="none" />
+
+        {hasValve && (
+          <g transform="translate(480, 45)">
+            <path d="M -180 375 L -10 375 L -10 35" stroke="#3b82f6" strokeWidth="3" fill="none" strokeDasharray="4,2" />
+            <circle cx="20" cy="15" r="25" fill="#fff" stroke="#f97316" strokeWidth="3" />
+            <path d="M 10 5 L 30 25 M 10 25 L 30 5" stroke="#f97316" strokeWidth="3" />
+          </g>
+        )}
+
+        <g opacity={hasStorage ? 1 : 0.1}>
+          <rect x="300" y="100" width="150" height="320" rx="20" fill="#fff" stroke="#94a3b8" strokeWidth={hasStorage ? 4 : 2} />
+          {hasStorage && (
+            <rect x="305" y={105 + (310 * (1 - Math.min(1, (tankTemp - 15) / 70)))} width="140" height={Math.max(0, 310 * ((tankTemp - 15) / 70))} rx="15" fill={getTempColor(tankTemp)} fillOpacity="0.2" />
+          )}
+          <text x="375" y="240" textAnchor="middle" className="text-3xl font-black fill-slate-900">{hasStorage ? `${tankTemp.toFixed(1)}ºC` : 'PERMUTADOR'}</text>
+        </g>
+
+        {system.equipments.map((eq, i) => {
+          const yPos = 130 + (i * 70);
+          return (
+            <g key={i}>
+              <path d={`M 600 ${yPos} L 450 ${yPos}`} stroke="#cbd5e1" strokeWidth="3" fill="none" />
+              <rect x="600" y={yPos - 25} width="180" height="60" rx="12" fill="#fff" stroke="#cbd5e1" strokeWidth="2" />
+              <text x="610" y={yPos - 5} className="text-[10px] font-black uppercase tracking-tight fill-slate-800">{eq.name.substring(0, 22)}</text>
+              <text x="610" y="10" transform={`translate(0, ${yPos})`} className="text-[9px] font-bold fill-slate-400">
+                {eq.type === 'SOLAR' ? `Área: ${eq.area}m²` : `P: ${eq.power}kW`}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
 
 const Page: React.FC<{ children: React.ReactNode, project: Project, pageNum: number }> = ({ children, project, pageNum }) => (
   <div className="page-wrapper">
     <div className="flex-1 flex flex-col">{children}</div>
     <div className="footer-text">
       <span>K-AQSPRO ENGINEERING SUITE • ID: {project.id}</span>
-      <span>{project.admin.client || 'RELATÓRIO TÉCNICO'}</span>
+      <span>{project.admin.projectDesignation || 'RELATÓRIO TÉCNICO'}</span>
       <span>PÁGINA {pageNum}</span>
     </div>
   </div>
@@ -75,6 +138,101 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
     return hours;
   }, [project.activities]);
 
+  const weeklyProfile = useMemo(() => {
+    return DAYS_REPORT.map((name, dayIndex) => {
+      let totalLiters = 0;
+      project.activities.forEach(act => {
+        if ((act.activeDays || []).includes(dayIndex)) {
+          totalLiters += act.volume;
+        }
+      });
+      return { name, volume: totalLiters };
+    });
+  }, [project.activities]);
+
+  const baseDailyResults = useMemo(() => {
+    if (baseResults.length === 0) return [];
+    return Array.from({ length: 24 }, (_, hour) => {
+      const filtered = baseResults.filter(r => (r.hour % 24 === hour));
+      const count = filtered.length;
+      return {
+        hour,
+        hourLabel: `${hour}:00`,
+        demand_L: filtered.reduce((acc, r) => acc + r.demand_L, 0) / count,
+        t_required: filtered.reduce((acc, r) => acc + r.t_required, 0) / count,
+        t_delivered: filtered.reduce((acc, r) => acc + r.t_delivered, 0) / count,
+        temp_tank: filtered.reduce((acc, r) => acc + r.temp_tank, 0) / count,
+        demand_kWh: filtered.reduce((acc, r) => acc + r.demand_kWh, 0) / count,
+        cost: filtered.reduce((acc, r) => acc + r.cost, 0) / count,
+      };
+    });
+  }, [baseResults]);
+
+  const baseWeeklyResults = useMemo(() => {
+    if (baseResults.length === 0) return [];
+    return baseResults.slice(168, 168 + 168).map((r, i) => ({
+      ...r,
+      hourIdx: i,
+      dayLabel: DAYS_REPORT[r.dayOfWeek],
+      cost: r.cost
+    }));
+  }, [baseResults]);
+
+  const propDailyResults = useMemo(() => {
+    if (propResults.length === 0) return [];
+    return Array.from({ length: 24 }, (_, hour) => {
+      const filtered = propResults.filter(r => (r.hour % 24 === hour));
+      const count = filtered.length;
+      return {
+        hour,
+        hourLabel: `${hour}:00`,
+        demand_L: filtered.reduce((acc, r) => acc + r.demand_L, 0) / count,
+        t_required: filtered.reduce((acc, r) => acc + r.t_required, 0) / count,
+        t_delivered: filtered.reduce((acc, r) => acc + r.t_delivered, 0) / count,
+        temp_tank: filtered.reduce((acc, r) => acc + r.temp_tank, 0) / count,
+        demand_kWh: filtered.reduce((acc, r) => acc + r.demand_kWh, 0) / count,
+        solar_gain_kWh: filtered.reduce((acc, r) => acc + r.solar_gain_kWh, 0) / count,
+        cost: filtered.reduce((acc, r) => acc + r.cost, 0) / count,
+      };
+    });
+  }, [propResults]);
+
+  const propWeeklyResults = useMemo(() => {
+    if (propResults.length === 0) return [];
+    return propResults.slice(168, 168 + 168).map((r, i) => ({
+      ...r,
+      hourIdx: i,
+      dayLabel: DAYS_REPORT[r.dayOfWeek],
+      cost: r.cost
+    }));
+  }, [propResults]);
+
+  const propMonthlyResults = useMemo(() => {
+    if (propResults.length === 0) return [];
+    const months = Array.from({ length: 12 }, (_, i) => ({ 
+      name: ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'][i],
+      cost: 0 
+    }));
+    propResults.forEach((r, i) => {
+      const monthIdx = Math.min(Math.floor(i / (8760/12)), 11);
+      months[monthIdx].cost += r.cost;
+    });
+    return months;
+  }, [propResults]);
+
+  const baseMonthlyResults = useMemo(() => {
+    if (baseResults.length === 0) return [];
+    const months = Array.from({ length: 12 }, (_, i) => ({ 
+      name: ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'][i],
+      cost: 0 
+    }));
+    baseResults.forEach((r, i) => {
+      const monthIdx = Math.min(Math.floor(i / (8760/12)), 11);
+      months[monthIdx].cost += r.cost;
+    });
+    return months;
+  }, [baseResults]);
+
   const climateData = useMemo(() => {
     const climate = project.customClimate || [];
     return Array.from({ length: 12 }, (_, i) => ({
@@ -92,7 +250,7 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Relatorio_KAQSPRO_${project.admin.client || 'Projeto'}.${type === 'html' ? 'html' : 'doc'}`;
+    link.download = `Relatorio_KAQSPRO_${project.admin.projectDesignation || 'Projeto'}.${type === 'html' ? 'html' : 'doc'}`;
     link.click();
   };
 
@@ -115,6 +273,13 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
       </div>
     );
   }
+
+  const renderEquipmentEfficiency = (eq: Equipment) => {
+    if (eq.type === 'HP') return ` | COP: ${eq.cop}`;
+    if (['BOILER', 'HEATER', 'ELECTRIC_TANK'].includes(eq.type)) return ` | η: ${(eq.efficiency || 0) * 100}%`;
+    if (eq.type === 'SOLAR') return ` | η0: ${eq.opticalEfficiency}`;
+    return '';
+  };
 
   return (
     <div className="report-root">
@@ -148,10 +313,9 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
           <div className="flex-1 flex flex-col justify-center space-y-10">
             <div className="space-y-4">
               <div className="inline-block px-4 py-1.5 bg-orange-50 text-orange-600 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border border-orange-100 shadow-sm">Simulação Dinâmica Horária 8760H</div>
-              <h1 className="text-[60px] font-black text-slate-900 leading-[0.9] tracking-tighter">
-                ESTUDO DE <br/>
-                VIABILIDADE E <br/>
-                <span className="text-orange-600">EFICIÊNCIA TÉRMICA</span>
+              <h1 className="text-[50px] font-black text-slate-900 leading-[0.9] tracking-tighter">
+                {project.admin.projectDesignation || 'ESTUDO DE EFICIÊNCIA TÉRMICA'} <br/>
+                <span className="text-orange-600 text-[40px]">{project.admin.buildingName || ''}</span>
               </h1>
             </div>
             <div className="w-24 h-2 bg-slate-900 rounded-full"></div>
@@ -162,8 +326,8 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
 
           <div className="grid grid-cols-2 gap-12 pt-16 border-t border-slate-100 mt-20" style={{display:'grid', gridTemplateColumns:'1fr 1fr'}}>
             <div className="space-y-6">
-              <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Instalação / Obra</p><p className="text-xl font-black text-slate-800 leading-tight">{project.admin.installation || 'N/A'}</p></div>
-              <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Localidade</p><p className="text-lg font-bold text-slate-600">{project.district}, Portugal</p></div>
+              <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Localização</p><p className="text-xl font-black text-slate-800 leading-tight">{project.admin.address || project.district}</p></div>
+              <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Concelho</p><p className="text-lg font-bold text-slate-600">{project.district}, Portugal</p></div>
             </div>
             <div className="space-y-6 text-right">
               <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Cliente / Beneficiário</p><p className="text-xl font-black text-slate-800">{project.admin.client || 'N/A'}</p></div>
@@ -203,7 +367,9 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
              <div className="card space-y-4">
                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2">Dados Administrativos</h4>
                <div className="space-y-3">
-                 <div><p className="text-[9px] font-bold text-slate-400 uppercase">Instalação</p><p className="text-sm font-black">{project.admin.installation}</p></div>
+                 <div><p className="text-[9px] font-bold text-slate-400 uppercase">Obra / Edifício</p><p className="text-sm font-black">{project.admin.buildingName || 'N/A'}</p></div>
+                 <div><p className="text-[9px] font-bold text-slate-400 uppercase">Designação Projeto</p><p className="text-sm font-black">{project.admin.projectDesignation || 'N/A'}</p></div>
+                 <div><p className="text-[9px] font-bold text-slate-400 uppercase">Morada</p><p className="text-sm font-black">{project.admin.address || 'N/A'}</p></div>
                  <div><p className="text-[9px] font-bold text-slate-400 uppercase">Proprietário</p><p className="text-sm font-black">{project.admin.client}</p></div>
                  <div><p className="text-[9px] font-bold text-slate-400 uppercase">Técnico Responsável</p><p className="text-sm font-black">{project.admin.technician}</p></div>
                </div>
@@ -224,12 +390,12 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
              <div className="flex items-start gap-4">
                <Building2 className="text-orange-500 shrink-0" size={32} />
                <div>
-                 <h4 className="text-lg font-black tracking-tight uppercase">Entidade Executante</h4>
+                 <h4 className="text-lg font-black tracking-tight uppercase text-white">Entidade Executante</h4>
                  <p className="text-xs font-bold text-slate-400 mt-1">{project.company.name}</p>
                  <div className="grid grid-cols-2 gap-4 mt-4 text-[9px] font-black text-slate-500 uppercase">
-                    <span>NIF: {project.company.nif}</span>
-                    <span>Alvará: {project.company.alvara}</span>
-                    <span>Contacto: {project.company.contacts}</span>
+                    <span className="text-white">NIF: {project.company.nif}</span>
+                    <span className="text-white">Alvará: {project.company.alvara}</span>
+                    <span className="text-white">Contacto: {project.company.phone} | {project.company.email}</span>
                  </div>
                </div>
              </div>
@@ -253,7 +419,7 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
                    <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Distribuição Mensal de Radiação (kWh/m²)</h4>
                    <ResponsiveContainer width="100%" height="80%">
                       <BarChart data={climateData}>
-                         <XAxis dataKey="name" tick={{fontSize: 7, fontWeight: 900}} axisLine={false} tickLine={false} />
+                         <XAxis dataKey="name" tick={{fontSize: 7, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} />
                          <YAxis hide />
                          <Bar dataKey="rad" fill="#f59e0b" radius={[4,4,0,0]} />
                       </BarChart>
@@ -265,8 +431,8 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
                 <ResponsiveContainer width="100%" height="100%">
                    <AreaChart data={climateData}>
                       <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
-                      <XAxis dataKey="name" tick={{fontSize: 8, fontWeight: 900}} axisLine={false} tickLine={false} />
-                      <YAxis domain={[0, 40]} axisLine={false} tickLine={false} tick={{fontSize: 8}} />
+                      <XAxis dataKey="name" tick={{fontSize: 8, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                      <YAxis domain={[0, 40]} axisLine={false} tickLine={false} tick={{fontSize: 8, fill: '#64748b'}} />
                       <Area type="monotone" dataKey="temp" stroke="#2563eb" fill="#2563eb" fillOpacity={0.05} strokeWidth={3} />
                    </AreaChart>
                 </ResponsiveContainer>
@@ -280,18 +446,18 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
         {/* P05: CONSUMO */}
         <Page project={project} pageNum={5}>
           <h3 className="section-title">03. Perfil de Consumo e Demanda</h3>
-          <div className="card bg-slate-900 text-white p-10 flex justify-between items-center border-l-8 border-orange-500 mb-8">
+          <div className="card bg-slate-900 text-white p-10 flex justify-between items-center border-l-8 border-orange-500 mb-6">
              <div>
-                <h4 className="text-2xl font-black uppercase tracking-tighter">Volume Total Consolidado</h4>
+                <h4 className="text-2xl font-black uppercase tracking-tighter text-white">Volume Total Consolidado</h4>
                 <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mt-1">Soma de todos os perfis ativos</p>
              </div>
              <div className="text-right">
-                <p className="text-5xl font-black tabular-nums">{project.activities.reduce((acc,a)=>acc+a.volume, 0).toLocaleString('pt-PT')} <span className="text-xl opacity-40">L/dia</span></p>
+                <p className="text-5xl font-black tabular-nums text-white">{project.activities.reduce((acc,a)=>acc+a.volume, 0).toLocaleString('pt-PT')} <span className="text-xl opacity-40">L/dia</span></p>
              </div>
           </div>
           
-          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Detalhamento por Atividade</h4>
-          <table className="mb-8">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Detalhamento por Atividade</h4>
+          <table className="mb-6">
              <thead><tr><th>Descrição do Consumidor</th><th>Caudal (L)</th><th>Temp. Projeto (ºC)</th><th>Dias de Uso</th></tr></thead>
              <tbody>
                 {project.activities.map(act => (
@@ -305,51 +471,123 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
              </tbody>
           </table>
 
-          <div className="card h-[350px] flex flex-col">
-             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-10">Perfil de Caudal Horário (L/h) - Dia Tipo</h4>
-             <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyProfile}>
-                   <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
-                   <XAxis dataKey="hour" tick={{fontSize: 8, fontWeight: 900}} axisLine={false} tickLine={false} />
-                   <YAxis axisLine={false} tickLine={false} tick={{fontSize: 8}} />
-                   <Bar dataKey="volume" fill="#3b82f6" radius={[4,4,0,0]} />
-                </BarChart>
-             </ResponsiveContainer>
+          <div className="flex flex-col gap-6">
+            <div className="card h-[250px] flex flex-col mb-0">
+               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Perfil de Caudal Horário (L/h) - Dia Tipo</h4>
+               <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dailyProfile}>
+                     <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                     <XAxis dataKey="hour" tick={{fontSize: 8, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                     <YAxis axisLine={false} tickLine={false} tick={{fontSize: 8, fill: '#64748b'}} />
+                     <Bar dataKey="volume" fill="#3b82f6" radius={[4,4,0,0]} />
+                  </BarChart>
+               </ResponsiveContainer>
+            </div>
+            <div className="card h-[250px] flex flex-col mb-0">
+               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Variação Semanal Estimada (L/dia)</h4>
+               <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={weeklyProfile}>
+                     <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                     <XAxis dataKey="name" tick={{fontSize: 8, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                     <YAxis axisLine={false} tickLine={false} tick={{fontSize: 8, fill: '#64748b'}} />
+                     <Bar dataKey="volume" fill="#f59e0b" radius={[4,4,0,0]} />
+                  </BarChart>
+               </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="mt-6 p-6 bg-slate-50 rounded-3xl border border-slate-200 flex items-start gap-4">
+            <Info className="text-orange-500 shrink-0 mt-1" size={20}/>
+            <div className="space-y-2">
+              <p className="text-xs font-black text-slate-900 uppercase tracking-widest">Nota Técnica: Análise Dinâmica de Demanda</p>
+              <p className="text-[10px] text-slate-600 leading-relaxed italic">
+                A modelação horária indica picos de consumo significativos {dailyProfile.some(d => d.volume > 200) ? 'superiores a 200L/h' : ''}, o que obriga a uma gestão criteriosa da inércia térmica do sistema. 
+                A análise da variação semanal revela uma flutuação {Math.max(...weeklyProfile.map(w=>w.volume)) - Math.min(...weeklyProfile.map(w=>w.volume)) > 100 ? 'elevada' : 'estável'}, 
+                sublinhando a importância de um sistema de generation modulante (Inverter) e de um volume de acumulação que funcione como buffer estratégico para garantir a estabilidade do setpoint durante os períodos de maior simultaneidade.
+              </p>
+            </div>
           </div>
         </Page>
 
         {/* P06: SISTEMA BASE */}
         <Page project={project} pageNum={6}>
            <h3 className="section-title">04. Especificação: Sistema Existente</h3>
-           <div className="grid grid-cols-2 gap-8 mt-4" style={{display:'grid', gridTemplateColumns:'1fr 1fr'}}>
-              <div className="space-y-6">
-                 <div className="card border-l-8 border-slate-400">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Equipamentos Atuais</h4>
+           <div className="grid grid-cols-2 gap-8 mt-2" style={{display:'grid', gridTemplateColumns:'1fr 1fr'}}>
+              <div className="space-y-3">
+                 <div className="card border-l-8 border-slate-400 py-3">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Equipamentos Atuais</h4>
                     {project.existingSystem.equipments.map((eq,i) => (
-                      <div key={i} className="flex justify-between items-center border-b border-slate-50 py-3">
+                      <div key={i} className="flex justify-between items-center border-b border-slate-50 py-1.5">
                          <div>
-                            <p className="text-sm font-black text-slate-800 uppercase leading-none">{eq.name}</p>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{eq.type}</p>
+                            <p className="text-xs font-black text-slate-800 uppercase leading-none">{eq.name}</p>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">{eq.type}{renderEquipmentEfficiency(eq)}</p>
                          </div>
-                         <span className="font-black text-slate-900">{eq.type === 'SOLAR' ? eq.area+' m²' : eq.power+' kW'}</span>
+                         <span className="font-black text-xs text-slate-900">{eq.type === 'SOLAR' ? eq.area+' m²' : eq.power+' kW'}</span>
                       </div>
                     ))}
                  </div>
-                 <div className="card">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Dados de Acumulação</h4>
-                    <div className="flex justify-between py-2 border-b border-slate-50"><span className="text-xs font-bold text-slate-500">Volume de Depósito</span><span className="font-black text-slate-900">{project.existingSystem.storage.volume} L</span></div>
-                    <div className="flex justify-between py-2 border-b border-slate-50"><span className="text-xs font-bold text-slate-500">Perdas Estáticas</span><span className="font-black text-slate-900">{project.existingSystem.storage.lossFactor} W/K</span></div>
-                    <div className="flex justify-between py-2"><span className="text-xs font-bold text-slate-500">Válvula Misturadora</span><span className="font-black text-slate-900">{project.existingSystem.hasMixingValve ? 'SIM' : 'NÃO'}</span></div>
+                 <div className="card py-3">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Dados de Acumulação</h4>
+                    <div className="flex justify-between py-1 border-b border-slate-50"><span className="text-xs font-bold text-slate-500">Volume de Depósito</span><span className="font-black text-slate-900">{project.existingSystem.storage.volume} L</span></div>
+                    <div className="flex justify-between py-1"><span className="text-xs font-bold text-slate-500">Válvula Misturadora</span><span className="font-black text-slate-900">{project.existingSystem.hasMixingValve ? 'SIM' : 'NÃO'}</span></div>
                  </div>
               </div>
-              <div className="card bg-slate-50 flex flex-col items-center justify-center p-12 text-center space-y-4">
-                 <AlertTriangle size={48} className="text-orange-500" />
-                 <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight leading-none">Status de Performance</h4>
-                 <p className="text-sm font-bold text-slate-500">O sistema atual apresenta sinais de ineficiência operacional.</p>
-                 <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                    <div className="w-[30%] h-full bg-orange-500"></div>
-                 </div>
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Efficiency Rating: Low (Baseline)</p>
+              <div className="space-y-4">
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Esquema P&ID Operacional</h4>
+                 <PIDDiagram system={project.existingSystem} simState={baseDailyResults[8]} />
+              </div>
+           </div>
+
+           <div className="grid grid-cols-2 gap-3 mt-4" style={{display:'grid', gridTemplateColumns:'1fr 1fr'}}>
+              <div className="card h-[180px] flex flex-col mb-0">
+                 <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Performance Térmira Horária (Média)</h4>
+                 <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={baseDailyResults}>
+                       <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                       <XAxis dataKey="hourLabel" tick={{fontSize: 7, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 7, fill: '#64748b'}} domain={[10, 85]} />
+                       <Bar dataKey="demand_L" fill="#3b82f6" fillOpacity={0.1} radius={[2,2,0,0]} />
+                       <Line type="stepAfter" dataKey="t_required" stroke="#94a3b8" strokeWidth={1} strokeDasharray="3 3" dot={false} />
+                       <Line type="monotone" dataKey="t_delivered" stroke="#ef4444" strokeWidth={2} dot={false} />
+                    </ComposedChart>
+                 </ResponsiveContainer>
+              </div>
+              <div className="card h-[180px] flex flex-col mb-0">
+                 <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Inércia Térmica Semanal (168h)</h4>
+                 <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={baseWeeklyResults}>
+                       <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                       <XAxis dataKey="hourIdx" tick={{fontSize: 7, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} tickFormatter={(v)=>v%24===0 ? baseWeeklyResults[v]?.dayLabel : ''} />
+                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 7, fill: '#64748b'}} domain={[10, 85]} />
+                       <Area type="monotone" dataKey="temp_tank" fill="#ef4444" fillOpacity={0.05} stroke="#ef4444" strokeWidth={2} />
+                    </AreaChart>
+                 </ResponsiveContainer>
+              </div>
+           </div>
+
+           <div className="card h-[160px] flex flex-col mt-4">
+              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Balanço Energético Semanal (Demanda vs Custo)</h4>
+              <ResponsiveContainer width="100%" height="100%">
+                 <AreaChart data={baseWeeklyResults}>
+                    <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                    <XAxis dataKey="hourIdx" tick={{fontSize: 7, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} tickFormatter={(v)=>v%24===0 ? baseWeeklyResults[v]?.dayLabel : ''} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 7, fill: '#64748b'}} />
+                    <Tooltip contentStyle={{backgroundColor: '#fff', color: '#1e293b', border: '1px solid #e2e8f0'}} />
+                    <Area type="monotone" dataKey="demand_kWh" name="Carga Térmica" fill="#3b82f6" fillOpacity={0.1} stroke="#3b82f6" strokeWidth={1} />
+                    <Area type="monotone" dataKey="cost" name="Custo (€)" fill="#ef4444" fillOpacity={0.2} stroke="#ef4444" strokeWidth={1} />
+                 </AreaChart>
+              </ResponsiveContainer>
+           </div>
+
+           <div className="mt-4 p-6 bg-slate-50 rounded-3xl border border-slate-200 flex items-start gap-4">
+              <AlertTriangle className="text-orange-500 shrink-0 mt-1" size={20}/>
+              <div className="space-y-2">
+                <p className="text-xs font-black text-slate-900 uppercase tracking-widest">Nota Técnica: Auditoria ao Sistema Existente</p>
+                <p className="text-[10px] text-slate-600 leading-relaxed italic">
+                  A simulação dinâmica do sistema Baseline revela uma eficiência sazonal {baseAnnual.cost > 2000 ? 'reduzida' : 'moderada'}, caracterizada por elevados tempos de recuperação e perdas térmicas por radiação no depósito calculadas em aprox. {((project.existingSystem.storage.lossFactor * 40 * 8760) / 1000).toFixed(0)} kWh/ano. 
+                  A ausência de renováveis {project.existingSystem.equipments.some(e => e.type === 'SOLAR') ? 'de elevada performance' : ''} e a dependência direta de vetores energéticos {project.energy.gas > 0.1 ? 'fósseis' : 'elétricos resistivos'} resultam num custo operacional (OPEX) agravado. 
+                  Adicionalmente, a falta de {project.existingSystem.hasMixingValve ? 'modulação inteligente' : 'válvula misturadora'} compromete a estabilidade térmica no terminal, gerando desperdício energético por sobreaquecimento desnecessário da rede de distribuição.
+                </p>
               </div>
            </div>
         </Page>
@@ -357,35 +595,85 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
         {/* P07: SISTEMA PROPOSTO */}
         <Page project={project} pageNum={7}>
            <h3 className="section-title">05. Especificação: Sistema Eficiente</h3>
-           <div className="grid grid-cols-2 gap-8 mt-4" style={{display:'grid', gridTemplateColumns:'1fr 1fr'}}>
-              <div className="space-y-6">
-                 <div className="card border-l-8 border-blue-600 shadow-lg">
-                    <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4">Equipamentos Propostos</h4>
+           <div className="grid grid-cols-2 gap-8 mt-2" style={{display:'grid', gridTemplateColumns:'1fr 1fr'}}>
+              <div className="space-y-3">
+                 <div className="card border-l-8 border-blue-600 shadow-lg py-3">
+                    <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3">Equipamentos Propostos</h4>
                     {project.proposedSystem.equipments.map((eq,i) => (
-                      <div key={i} className="flex justify-between items-center border-b border-slate-50 py-3">
+                      <div key={i} className="flex justify-between items-center border-b border-slate-50 py-1.5">
                          <div>
-                            <p className="text-sm font-black text-slate-800 uppercase leading-none">{eq.name}</p>
-                            <p className="text-[9px] font-bold text-blue-500 uppercase mt-1">{eq.type}</p>
+                            <p className="text-xs font-black text-slate-800 uppercase leading-none">{eq.name}</p>
+                            <p className="text-[8px] font-bold text-blue-500 uppercase mt-0.5">{eq.type}{renderEquipmentEfficiency(eq)}</p>
                          </div>
-                         <span className="font-black text-slate-900">{eq.type === 'SOLAR' ? eq.area+' m²' : eq.power+' kW'}</span>
+                         <span className="font-black text-xs text-slate-900">{eq.type === 'SOLAR' ? eq.area+' m²' : eq.power+' kW'}</span>
                       </div>
                     ))}
                  </div>
-                 <div className="card border-l-8 border-green-500">
-                    <h4 className="text-[10px] font-black text-green-600 uppercase tracking-widest mb-4">Acumulação Otimizada</h4>
-                    <div className="flex justify-between py-2 border-b border-slate-50"><span className="text-xs font-bold text-slate-500">Volume de Depósito</span><span className="font-black text-slate-900">{project.proposedSystem.storage.volume} L</span></div>
-                    <div className="flex justify-between py-2 border-b border-slate-50"><span className="text-xs font-bold text-slate-500">Misturadora Inteligente</span><span className="font-black text-slate-900">INSTALADA</span></div>
-                    <div className="flex justify-between py-2"><span className="text-xs font-bold text-slate-500">Classe de Eficiência</span><span className="font-black text-green-600 uppercase">A+++</span></div>
+                 <div className="card border-l-8 border-green-500 py-3">
+                    <h4 className="text-[10px] font-black text-green-600 uppercase tracking-widest mb-3">Acumulação Otimizada</h4>
+                    <div className="flex justify-between py-1 border-b border-slate-50"><span className="text-xs font-bold text-slate-500">Volume de Depósito</span><span className="font-black text-slate-900">{project.proposedSystem.storage.volume} L</span></div>
+                    <div className="flex justify-between py-1"><span className="text-xs font-bold text-slate-500">Misturadora Inteligente</span><span className={`font-black uppercase ${project.proposedSystem.hasMixingValve ? 'text-green-600' : 'text-red-500'}`}>{project.proposedSystem.hasMixingValve ? 'INSTALADA' : 'NÃO PREVISTA'}</span></div>
                  </div>
               </div>
-              <div className="card bg-blue-600 text-white flex flex-col items-center justify-center p-12 text-center space-y-4 shadow-2xl">
-                 <CheckCircle2 size={56} className="text-white" />
-                 <h4 className="text-2xl font-black uppercase tracking-tight leading-none">Upgrade Recomendado</h4>
-                 <p className="text-xs font-medium opacity-80">Solução baseada em fontes renováveis e aerotermia de alto rendimento.</p>
-                 <div className="w-full h-3 bg-white/20 rounded-full overflow-hidden mt-6">
-                    <div className="w-[95%] h-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.8)]"></div>
-                 </div>
-                 <p className="text-[10px] font-black uppercase tracking-widest">Efficiency Rating: Elite (K-Standard)</p>
+              <div className="space-y-4">
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Esquema P&ID Proposto</h4>
+                 <PIDDiagram system={project.proposedSystem} simState={propDailyResults[8]} />
+              </div>
+           </div>
+
+           <div className="grid grid-cols-2 gap-3 mt-4" style={{display:'grid', gridTemplateColumns:'1fr 1fr'}}>
+              <div className="card h-[180px] flex flex-col mb-0">
+                 <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Performance Térmica Horária (Média)</h4>
+                 <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={propDailyResults}>
+                       <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                       <XAxis dataKey="hourLabel" tick={{fontSize: 7, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 7, fill: '#64748b'}} domain={[10, 85]} />
+                       <Bar dataKey="demand_L" fill="#3b82f6" fillOpacity={0.1} radius={[2,2,0,0]} />
+                       <Line type="stepAfter" dataKey="t_required" stroke="#94a3b8" strokeWidth={1} strokeDasharray="3 3" dot={false} />
+                       <Line type="monotone" dataKey="t_delivered" stroke="#ef4444" strokeWidth={2} dot={false} />
+                    </ComposedChart>
+                 </ResponsiveContainer>
+              </div>
+              <div className="card h-[180px] flex flex-col mb-0">
+                 <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Inércia Térmica Semanal (168h)</h4>
+                 <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={propWeeklyResults}>
+                       <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                       <XAxis dataKey="hourIdx" tick={{fontSize: 7, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} tickFormatter={(v)=>v%24===0 ? propWeeklyResults[v]?.dayLabel : ''} />
+                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 7, fill: '#64748b'}} domain={[10, 85]} />
+                       <Area type="monotone" dataKey="temp_tank" fill="#ef4444" fillOpacity={0.05} stroke="#ef4444" strokeWidth={2} />
+                    </AreaChart>
+                 </ResponsiveContainer>
+              </div>
+           </div>
+
+           <div className="card h-[160px] flex flex-col mt-4">
+              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Dinâmica de Fluxos Energéticos Semanais (kWh)</h4>
+              <ResponsiveContainer width="100%" height="100%">
+                 <AreaChart data={propWeeklyResults}>
+                    <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                    <XAxis dataKey="hourIdx" tick={{fontSize: 7, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} tickFormatter={(v)=>v%24===0 ? propWeeklyResults[v]?.dayLabel : ''} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 7, fill: '#64748b'}} />
+                    <Tooltip contentStyle={{backgroundColor: '#fff', color: '#1e293b', border: '1px solid #e2e8f0'}} />
+                    <Area type="monotone" dataKey="demand_kWh" name="Demanda" fill="#3b82f6" fillOpacity={0.1} stroke="#3b82f6" strokeWidth={1} />
+                    <Area type="monotone" dataKey="solar_gain_kWh" name="Solar" fill="#f59e0b" fillOpacity={0.2} stroke="#f59e0b" strokeWidth={1} />
+                    <Area type="monotone" dataKey="cost" name="Custo (€)" fill="#10b981" fillOpacity={0.1} stroke="#10b981" strokeDasharray="3 3" strokeWidth={1} />
+                    <Legend iconType="circle" wrapperStyle={{fontSize: '8px', fontWeight: 'bold'}} />
+                 </AreaChart>
+              </ResponsiveContainer>
+           </div>
+
+           <div className="mt-4 p-6 bg-blue-50 rounded-3xl border border-blue-200 flex items-start gap-4">
+              <CheckCircle2 className="text-blue-600 shrink-0 mt-1" size={20}/>
+              <div className="space-y-2">
+                <p className="text-xs font-black text-slate-900 uppercase tracking-widest">Nota Técnica: Análise do Sistema de Eficiência</p>
+                <p className="text-[10px] text-slate-600 leading-relaxed italic">
+                  A solução proposta para <strong>{project.admin.buildingName || 'este projeto'}</strong> baseia-se numa arquitetura de alta performance com integração de fontes renováveis. 
+                  O uso de Bombas de Calor com tecnologia Inverter permite um COP sazonal {propAnnual.demand_kWh / (propAnnual.elec_kWh || 1) > 3 ? 'elevado (>3.0)' : 'superior ao convencional'}, adaptando a potência térmica à demanda real em tempo-real. 
+                  A contribuição solar térmica cobre aprox. {((propAnnual.solar_kWh / propAnnual.demand_kWh) * 100).toFixed(0)}% da carga anual, reduzindo drasticamente a dependência da rede elétrica. 
+                  A inclusão da Válvula Misturadora Termostática é um pilar de eficiência e segurança, permitindo elevar o depósito a temperaturas de desinfeção (Legionella) sem risco para o utilizador final, enquanto estabiliza o consumo energético no terminal.
+                </p>
               </div>
            </div>
         </Page>
@@ -397,16 +685,17 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
               <div className="card bg-slate-50 border-red-200">
                  <h4 className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-6">Métricas de Performance Anual</h4>
                  <div className="space-y-4">
-                    <div className="flex justify-between items-end"><span className="text-xs font-bold text-slate-500 uppercase">Demanda Térmica</span><span className="text-xl font-black">{baseAnnual.demand_kWh.toLocaleString('pt-PT', {maximumFractionDigits:0})} kWh</span></div>
-                    <div className="flex justify-between items-end"><span className="text-xs font-bold text-slate-500 uppercase">Consumo Energia</span><span className="text-xl font-black">{(baseAnnual.elec_kWh + baseAnnual.gas_kWh).toLocaleString('pt-PT', {maximumFractionDigits:0})} kWh</span></div>
+                    <div className="flex justify-between items-end"><span className="text-xs font-bold text-slate-500 uppercase">Demanda Térmica</span><span className="text-xl font-black text-slate-800">{baseAnnual.demand_kWh.toLocaleString('pt-PT', {maximumFractionDigits:0})} kWh</span></div>
+                    <div className="flex justify-between items-end"><span className="text-xs font-bold text-slate-500 uppercase">Aporte Solar Direto</span><span className="text-xl font-black text-orange-500">{baseAnnual.solar_kWh.toLocaleString('pt-PT', {maximumFractionDigits:0})} kWh</span></div>
+                    <div className="flex justify-between items-end"><span className="text-xs font-bold text-slate-500 uppercase">Consumo Energia</span><span className="text-xl font-black text-slate-800">{(baseAnnual.elec_kWh + baseAnnual.gas_kWh).toLocaleString('pt-PT', {maximumFractionDigits:0})} kWh</span></div>
                     <div className="flex justify-between items-end pt-4 border-t border-slate-200"><span className="text-xs font-bold text-slate-700 uppercase">Custo Operacional</span><span className="text-2xl font-black text-red-600">{baseAnnual.cost.toLocaleString('pt-PT', {style:'currency', currency:'EUR'})}</span></div>
                  </div>
               </div>
               <div className="card h-80 flex flex-col">
                  <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">Distribuição de Custo Mensal (€)</h4>
                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={climateData.map((d,i) => ({ name: d.name, cost: baseAnnual.cost / 12 * (1 + (Math.random()-0.5)*0.3) }))}>
-                       <XAxis dataKey="name" tick={{fontSize: 7, fontWeight: 900}} axisLine={false} tickLine={false} />
+                    <BarChart data={baseMonthlyResults}>
+                       <XAxis dataKey="name" tick={{fontSize: 7, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} />
                        <YAxis hide />
                        <Bar dataKey="cost" fill="#ef4444" radius={[4,4,0,0]} />
                     </BarChart>
@@ -426,20 +715,20 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
               <div className="card bg-green-50 border-green-200">
                  <h4 className="text-[10px] font-black text-green-600 uppercase tracking-widest mb-6">Métricas de Performance Anual</h4>
                  <div className="space-y-4">
+                    <div className="flex justify-between items-end"><span className="text-xs font-bold text-slate-500 uppercase">Demanda Térmica</span><span className="text-xl font-black text-slate-800">{propAnnual.demand_kWh.toLocaleString('pt-PT', {maximumFractionDigits:0})} kWh</span></div>
                     <div className="flex justify-between items-end"><span className="text-xs font-bold text-slate-500 uppercase">Aporte Solar Direto</span><span className="text-xl font-black text-orange-500">{propAnnual.solar_kWh.toLocaleString('pt-PT', {maximumFractionDigits:0})} kWh</span></div>
-                    <div className="flex justify-between items-end"><span className="text-xs font-bold text-slate-500 uppercase">Consumo Energia</span><span className="text-xl font-black">{(propAnnual.elec_kWh + propAnnual.gas_kWh).toLocaleString('pt-PT', {maximumFractionDigits:0})} kWh</span></div>
+                    <div className="flex justify-between items-end"><span className="text-xs font-bold text-slate-500 uppercase">Consumo Energia</span><span className="text-xl font-black text-slate-800">{(propAnnual.elec_kWh + propAnnual.gas_kWh).toLocaleString('pt-PT', {maximumFractionDigits:0})} kWh</span></div>
                     <div className="flex justify-between items-end pt-4 border-t border-green-200"><span className="text-xs font-bold text-slate-700 uppercase">Custo Operacional</span><span className="text-2xl font-black text-green-600">{propAnnual.cost.toLocaleString('pt-PT', {style:'currency', currency:'EUR'})}</span></div>
                  </div>
               </div>
               <div className="card h-80 flex flex-col">
-                 <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">Balanço Energético Horário (Dia Tipo)</h4>
+                 <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">Evolução Mensal de Custos (€)</h4>
                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyProfile.map((d,i) => ({ hour: d.hour, solar: Math.sin(i*Math.PI/24)*10, demand: d.volume/20 }))}>
-                       <XAxis dataKey="hour" tick={{fontSize: 7, fontWeight: 900}} axisLine={false} tickLine={false} />
+                    <BarChart data={propMonthlyResults}>
+                       <XAxis dataKey="name" tick={{fontSize: 7, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} />
                        <YAxis hide />
-                       <Area dataKey="solar" fill="#f59e0b" stroke="#f59e0b" fillOpacity={0.3} />
-                       <Area dataKey="demand" fill="#3b82f6" stroke="#3b82f6" fillOpacity={0.1} />
-                    </AreaChart>
+                       <Bar dataKey="cost" fill="#10b981" radius={[4,4,0,0]} />
+                    </BarChart>
                  </ResponsiveContainer>
               </div>
            </div>
@@ -463,23 +752,69 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
               </div>
               <div className="card bg-orange-600 text-white text-center py-8 shadow-lg">
                  <p className="text-[9px] font-black text-orange-200 uppercase mb-2">POUPANÇA TOTAL</p>
-                 <p className="text-2xl font-black">{((1 - propAnnual.cost/baseAnnual.cost)*100).toFixed(0)}%</p>
+                 <p className="text-2xl font-black text-white">{((1 - propAnnual.cost/baseAnnual.cost)*100).toFixed(0)}%</p>
               </div>
            </div>
            
-           <div className="card h-[450px] flex flex-col">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-10">Diferencial de Custos Mensais (€)</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                 <BarChart data={climateData.map((d,i) => ({ name: d.name, base: baseAnnual.cost/12, prop: propAnnual.cost/12 }))}>
-                    <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tick={{fontSize: 9, fontWeight: 900}} axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} />
-                    <Tooltip />
-                    <Legend verticalAlign="top" height={36} iconType="circle" />
-                    <Bar dataKey="base" name="Cenário Base" fill="#ef4444" radius={[4,4,0,0]} />
-                    <Bar dataKey="prop" name="Cenário Proposto" fill="#10b981" radius={[4,4,0,0]} />
-                 </BarChart>
-              </ResponsiveContainer>
+           <div className="space-y-8">
+             <div className="card h-[320px] flex flex-col mb-0">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-10">Diferencial de Custos Mensais (€)</h4>
+                <ResponsiveContainer width="100%" height="100%">
+                   <BarChart data={climateData.map((d,i) => ({ name: d.name, base: baseAnnual.cost/12, prop: propAnnual.cost/12 }))}>
+                      <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{fontSize: 9, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fill: '#64748b'}} />
+                      <Tooltip contentStyle={{backgroundColor: '#fff', border: '1px solid #e2e8f0'}} />
+                      <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{fontSize: '9px', fontWeight: 'black', textTransform: 'uppercase'}} />
+                      <Bar dataKey="base" name="Cenário Base" fill="#ef4444" radius={[4,4,0,0]} />
+                      <Bar dataKey="prop" name="Cenário Proposto" fill="#10b981" radius={[4,4,0,0]} />
+                   </BarChart>
+                </ResponsiveContainer>
+             </div>
+
+             <div className="grid grid-cols-2 gap-8" style={{display:'grid', gridTemplateColumns:'1fr 1fr'}}>
+               <div className="card h-[280px] flex flex-col mb-0">
+                  <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-6">Custos Dia Típico (Média Horária)</h4>
+                  <ResponsiveContainer width="100%" height="100%">
+                     <AreaChart data={baseDailyResults.map((r,i) => ({ hourLabel: r.hourLabel, base: r.cost, prop: propDailyResults[i]?.cost || 0 }))}>
+                        <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                        <XAxis dataKey="hourLabel" tick={{fontSize: 8, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 8, fill: '#64748b'}} />
+                        <Tooltip contentStyle={{borderRadius: '12px'}} />
+                        <Area type="monotone" dataKey="base" name="Base (€)" stroke="#ef4444" fill="#ef4444" fillOpacity={0.05} strokeWidth={2} />
+                        <Area type="monotone" dataKey="prop" name="Proposto (€)" stroke="#10b981" fill="#10b981" fillOpacity={0.1} strokeWidth={2} />
+                        <Legend iconType="circle" wrapperStyle={{fontSize: '8px', fontWeight: 'black'}} />
+                     </AreaChart>
+                  </ResponsiveContainer>
+               </div>
+               <div className="card h-[280px] flex flex-col mb-0">
+                  <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-6">Dinâmica de Custos Semanal (168h)</h4>
+                  <ResponsiveContainer width="100%" height="100%">
+                     <AreaChart data={baseWeeklyResults.map((r,i) => ({ hourIdx: i, base: r.cost, prop: propWeeklyResults[i]?.cost || 0, label: r.dayLabel }))}>
+                        <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                        <XAxis dataKey="hourIdx" tick={{fontSize: 8, fontWeight: 900, fill: '#64748b'}} axisLine={false} tickLine={false} tickFormatter={(v)=>v%24===0 ? baseWeeklyResults[v]?.dayLabel : ''} />
+                        <YAxis hide />
+                        <Tooltip labelFormatter={(v) => `Hora ${v}`} />
+                        <Area type="monotone" dataKey="base" name="Base" stroke="#ef4444" fill="#ef4444" fillOpacity={0.05} />
+                        <Area type="monotone" dataKey="prop" name="Proposto" stroke="#10b981" fill="#10b981" fillOpacity={0.15} />
+                        <Legend iconType="circle" wrapperStyle={{fontSize: '8px', fontWeight: 'black'}} />
+                     </AreaChart>
+                  </ResponsiveContainer>
+               </div>
+             </div>
+           </div>
+
+           <div className="mt-8 p-6 bg-slate-50 rounded-3xl border border-slate-200 flex items-start gap-4">
+              <Info className="text-orange-500 shrink-0 mt-1" size={20}/>
+              <div className="space-y-2">
+                <p className="text-xs font-black text-slate-900 uppercase tracking-widest">Nota Técnica: Análise do Comparativo entre Sistemas</p>
+                <p className="text-[10px] text-slate-600 leading-relaxed italic">
+                  A análise comparativa demonstra uma redução drástica na dependência de combustíveis {project.energy.gas > 0.1 ? 'fósseis' : 'convencionais'} e uma estabilização significativa dos custos fixos. 
+                  A poupança operacional de {((1 - propAnnual.cost/baseAnnual.cost)*100).toFixed(0)}% é resultado da simbiose entre a generation termodinâmica (Bomba de Calor) e o aporte solar gratuito, 
+                  permitindo amortizar o diferencial de investimento num prazo consideravelmente inferior ao ciclo de vida útil previsto para a instalação. 
+                  A transição para o cenário proposto não apenas otimiza a rentabilidade financeira, como garante um patamar superior de conforto térmico e conformidade ambiental.
+                </p>
+              </div>
            </div>
         </Page>
 
@@ -512,11 +847,11 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
            
            <div className="mt-auto card bg-slate-900 text-white p-14 rounded-[40px] border-b-[10px] border-orange-600 flex justify-between items-center shadow-2xl">
               <div>
-                 <h4 className="text-3xl font-black uppercase tracking-tighter">Investimento Total Estimado</h4>
+                 <h4 className="text-3xl font-black uppercase tracking-tighter text-white">Investimento Total Estimado</h4>
                  <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mt-2">Valores sem I.V.A. à taxa legal em vigor</p>
               </div>
               <div className="text-right">
-                 <p className="text-6xl font-black tabular-nums">{totalCapex.toLocaleString('pt-PT', {minimumFractionDigits:2})} €</p>
+                 <p className="text-6xl font-black tabular-nums text-white">{totalCapex.toLocaleString('pt-PT', {minimumFractionDigits:2})} €</p>
               </div>
            </div>
         </Page>
@@ -528,12 +863,12 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
               <div className="space-y-8">
                  <div className="card bg-orange-600 text-white p-12 border-b-[8px] border-slate-900 shadow-xl">
                     <p className="text-[10px] font-black text-orange-200 uppercase tracking-widest mb-3">Payback Simples (PRI)</p>
-                    <p className="text-6xl font-black tabular-nums">{payback.toFixed(1)} <span className="text-2xl opacity-40">Anos</span></p>
+                    <p className="text-6xl font-black tabular-nums text-white">{payback.toFixed(1)} <span className="text-2xl opacity-40">Anos</span></p>
                  </div>
                  <div className="card bg-slate-50 p-10 space-y-4">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fluxo de Caixa Acumulado (10 Anos)</h4>
-                    <div className="flex justify-between items-center border-b pb-2"><span className="text-xs font-bold text-slate-500">Capex</span><span className="font-black text-red-600">-{totalCapex.toLocaleString('pt-PT')} €</span></div>
-                    <div className="flex justify-between items-center border-b pb-2"><span className="text-xs font-bold text-slate-500">Poupança 10 Anos</span><span className="font-black text-green-600">+{(annualSaving * 10).toLocaleString('pt-PT')} €</span></div>
+                    <div className="flex justify-between items-center border-b pb-2"><span className="text-xs font-bold text-slate-500 uppercase">Capex</span><span className="font-black text-red-600">-{totalCapex.toLocaleString('pt-PT')} €</span></div>
+                    <div className="flex justify-between items-center border-b pb-2"><span className="text-xs font-bold text-slate-500 uppercase">Poupança 10 Anos</span><span className="font-black text-green-600">+{(annualSaving * 10).toLocaleString('pt-PT')} €</span></div>
                     <div className="flex justify-between items-center pt-2"><span className="text-xs font-black text-slate-800 uppercase">Benefício Líquido</span><span className="font-black text-blue-600 text-lg">{(annualSaving * 10 - totalCapex).toLocaleString('pt-PT')} €</span></div>
                  </div>
               </div>
@@ -544,13 +879,25 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
                        <Pie data={[{name:'Investimento', value: totalCapex}, {name:'Poupança 10a', value: annualSaving*10}]} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
                           <Cell fill="#e2e8f0" /><Cell fill="#f97316" />
                        </Pie>
-                       <Tooltip />
+                       <Tooltip contentStyle={{backgroundColor: '#fff', color: '#1e293b'}} />
                     </PieChart>
                  </ResponsiveContainer>
                  <div className="mt-8 space-y-2">
                     <p className="text-2xl font-black text-slate-800">ROI: {( (annualSaving / totalCapex) * 100 ).toFixed(1)}% / ano</p>
                     <p className="text-xs font-medium text-slate-500 italic">O retorno deste investimento é superior à média de rentabilidade de ativos financeiros tradicionais.</p>
                  </div>
+              </div>
+           </div>
+
+           <div className="mt-6 p-6 bg-slate-50 rounded-3xl border border-slate-200 flex items-start gap-4">
+              <Calculator className="text-orange-500 shrink-0 mt-1" size={20}/>
+              <div className="space-y-2">
+                <p className="text-xs font-black text-slate-900 uppercase tracking-widest">Nota Técnica: Viabilidade e Sustentabilidade Financeira</p>
+                <p className="text-[10px] text-slate-600 leading-relaxed italic">
+                  O investimento total (CAPEX) orçamentado em {totalCapex.toLocaleString('pt-PT', {style:'currency', currency:'EUR'})} apresenta um Período de Recuperação do Investimento (PRI) de {payback.toFixed(1)} anos, um indicador excepcional no contexto de eficiência energética predial. 
+                  A drástica redução do custo operacional (OPEX) anual para {propAnnual.cost.toLocaleString('pt-PT', {style:'currency', currency:'EUR'})} permite que a poupança gerada atue como um mecanismo de autofinanciamento direto. 
+                  A análise de rentabilidade (ROI) de {( (annualSaving / totalCapex) * 100 ).toFixed(1)}% ao ano confirma a robustez económica da proposta, protegendo o utilizador final contra a inflação dos tarifários elétricos e de gás a longo prazo.
+                </p>
               </div>
            </div>
         </Page>
@@ -562,7 +909,7 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
               <div className="card bg-slate-50 border-l-[15px] border-slate-900 shadow-sm p-14">
                  <h4 className="text-sm font-black text-slate-900 uppercase mb-6 flex items-center gap-3"><Briefcase size={22} className="text-orange-600"/> Síntese Crítica de Engenharia</h4>
                  <p className="text-sm text-slate-600 leading-relaxed italic font-medium">
-                   Com base na modelação dinâmica horarizada efetuada, conclui-se que o sistema Baseline atual é económica e ambientalmente insustentável a curto prazo. A proposta técnica para <strong>{project.admin.installation}</strong> baseada em fontes renováveis garante uma cobertura de demanda térmica superior a 95% com estabilidade de setpoint.
+                   Com base na modelação dinâmica horarizada efetuada, conclui-se que o sistema Baseline atual é económica e ambientalmente insustentável a curto prazo. A proposta técnica para <strong>{project.admin.buildingName || project.admin.projectDesignation}</strong> baseada em fontes renováveis garante uma cobertura de demanda térmica superior a 95% com estabilidade de setpoint.
                    <br/><br/>
                    A solução orçamentada em <strong>{totalCapex.toLocaleString('pt-PT', {style:'currency', currency:'EUR'})}</strong> amortiza-se em apenas <strong>{payback.toFixed(1)} anos</strong>, tornando-a um investimento estratégico prioritário para a redução de custos fixos operacionais. O parecer desta engenharia é <strong>TOTALMENTE FAVORÁVEL</strong> à adjudicação imediata conforme especificado nos capítulos III e IV deste relatório.
                  </p>
@@ -585,12 +932,12 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
                  <div className="text-center">
                     <div className="w-64 h-px bg-slate-300 mb-2"></div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">O Técnico Responsável</p>
-                    <p className="text-sm font-bold text-slate-800">José Coelho</p>
+                    <p className="text-sm font-bold text-slate-800">{project.admin.technician}</p>
                  </div>
                  <div className="text-center">
                     <div className="w-64 h-px bg-slate-300 mb-2"></div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Direção de Fiscalização</p>
-                    <p className="text-sm font-bold text-slate-800">KOELHO2000</p>
+                    <p className="text-sm font-bold text-slate-800">{project.company.name}</p>
                  </div>
               </div>
            </div>
@@ -634,7 +981,7 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
         <Page project={project} pageNum={15}>
           <div className="flex-1 flex flex-col items-center justify-center text-center">
              <div className="w-24 h-24 bg-slate-900 rounded-[35px] flex items-center justify-center text-white text-5xl font-black mb-12 shadow-2xl">K</div>
-             <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase mb-2">KOELHO2000</h2>
+             <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase mb-2">{project.company.name}</h2>
              <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.5em] mb-20">The Gold Standard in AQS Engineering</p>
              
              <div className="w-16 h-1 bg-orange-600 mb-20"></div>
@@ -642,22 +989,22 @@ const ReportPage: React.FC<ReportPageProps> = ({ project, baseResults, propResul
              <div className="grid grid-cols-1 gap-12 max-w-md">
                 <div className="flex flex-col items-center gap-3">
                    <Globe size={24} className="text-slate-300" />
-                   <p className="text-sm font-black text-slate-800">www.koelho2000.com</p>
+                   <p className="text-sm font-black text-slate-800">{project.company.website}</p>
                 </div>
                 <div className="flex flex-col items-center gap-3">
                    <Mail size={24} className="text-slate-300" />
-                   <p className="text-sm font-black text-slate-800">koelho2000@gmail.com</p>
+                   <p className="text-sm font-black text-slate-800">{project.company.email}</p>
                 </div>
                 <div className="flex flex-col items-center gap-3">
                    <Phone size={24} className="text-slate-300" />
-                   <p className="text-sm font-black text-slate-800">+351 934 021 666</p>
+                   <p className="text-sm font-black text-slate-800">{project.company.phone}</p>
                 </div>
              </div>
           </div>
           
           <div className="pt-20 text-center">
              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest leading-loose">
-               © {new Date().getFullYear()} KOELHO2000 • TODOS OS DIREITOS RESERVADOS <br/>
+               © {new Date().getFullYear()} {project.company.name} • TODOS OS DIREITOS RESERVADOS <br/>
                PROPRIEDADE INTELECTUAL PROTEGIDA • SOFTWARE DE ENGENHARIA AVANÇADA
              </p>
           </div>

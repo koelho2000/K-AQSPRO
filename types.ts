@@ -16,7 +16,9 @@ export enum ModuleType {
 }
 
 export interface ClientData {
-  installation: string;
+  buildingName: string;
+  projectDesignation: string;
+  address: string;
   client: string;
   technician: string;
 }
@@ -25,7 +27,9 @@ export interface CompanyInfo {
   name: string;
   nif: string;
   alvara: string;
-  contacts: string;
+  website: string;
+  email: string;
+  phone: string;
   logoUrl?: string;
 }
 

@@ -22,7 +22,7 @@ export function runSimulation(project: Project, system: System): HourlySimResult
     const t_ambient = ambientData.temp;
     const t_cold_water = 15;
 
-    // 1. Cálculo do Perfil Consolidado (Soma de todas as atividades ativas na hora h)
+    // 1. Cálculo do Perfil Consolidado
     let hourlyDemand_L = 0;
     let weightedTempSum = 0;
     project.activities.forEach(act => {
@@ -34,24 +34,37 @@ export function runSimulation(project: Project, system: System): HourlySimResult
       }
     });
     
-    // Temperatura de mistura necessária baseada no perfil consolidado
     const t_required = hourlyDemand_L > 0 ? weightedTempSum / hourlyDemand_L : 0;
     
-    // Temperatura de entrega real:
-    // Se misturadora ativa: min(Tanque, Requerido)
-    // Se não ativa: Temperatura do Tanque
+    // LOGICA DA VÁLVULA TERMOSTÁTICA REFINADA:
+    // A válvula termostática reduz o consumo porque:
+    // 1. Evita enviar água excessivamente quente para as tubagens (reduz perdas de distribuição).
+    // 2. Garante que apenas a energia necessária (setpoint terminal) sai do depósito.
     let t_delivered = 0;
+    let distributionEfficiency = 1.0;
+
     if (hourlyDemand_L > 0) {
       if (system.hasMixingValve) {
+        // Com Válvula: A água sai controlada. Se o tanque estiver a 60ºC mas preciso de 45ºC, 
+        // a energia extraída é correspondente aos 45ºC.
         t_delivered = Math.min(currentTemp, t_required);
+        distributionEfficiency = 0.98; // Perdas mínimas (baixa temperatura na rede)
       } else {
-        t_delivered = currentTemp;
+        // Sem Válvula: A água sai à temperatura do tanque. 
+        // O utilizador mistura na torneira, mas o "custo" energético de transporte é do tanque.
+        t_delivered = Math.max(currentTemp, t_required);
+        // Sem válvula, as perdas por radiação nas tubagens são muito maiores (água circula mais quente)
+        // e o controle é ineficiente.
+        distributionEfficiency = 0.80; 
       }
     }
 
-    const q_demand_kWh = (hourlyDemand_L * CP_WATER * (Math.max(t_delivered, t_cold_water) - t_cold_water)) / 1000;
+    // Energia efetivamente extraída do sistema (kWh)
+    const q_demand_kWh = hourlyDemand_L > 0 
+      ? (hourlyDemand_L * CP_WATER * (Math.max(t_delivered, t_cold_water) - t_cold_water)) / (1000 * distributionEfficiency)
+      : 0;
 
-    // 2. Ganhos Solares (Normalizados)
+    // 2. Ganhos Solares
     let q_solar_kWh = 0;
     const solar = system.equipments.find(e => e.type === 'SOLAR');
     if (solar && solar.area && !isInstantaneous) {
@@ -59,7 +72,7 @@ export function runSimulation(project: Project, system: System): HourlySimResult
       q_solar_kWh = (ambientData.radiation * solar.area * (solar.opticalEfficiency || 0.75) * hourEffect) / 7.63;
     }
 
-    // 3. Produção de Calor e Consumo de Energia (Ajustado por Eficiência)
+    // 3. Produção de Calor e Consumo
     let q_input_kWh = 0;
     let elec_cons = 0;
     let gas_cons = 0;
@@ -68,8 +81,10 @@ export function runSimulation(project: Project, system: System): HourlySimResult
       .filter(e => e.type !== 'SOLAR')
       .reduce((acc, e) => acc + (e.power || 0), 0);
 
+    // Ajuste de setpoint: Sem válvula, mantemos o mínimo. Com válvula, subimos para 55ºC (buffer/higiene)
+    // mas a extração q_demand_kWh agora é menor por causa da lógica acima.
     const minMaintainTemp = system.hasMixingValve ? 55 : 45;
-    const setpoint = Math.max(t_required + 5, minMaintainTemp);
+    const setpoint = Math.max(t_required + 2, minMaintainTemp);
     
     if (currentTemp < setpoint || (isInstantaneous && hourlyDemand_L > 0)) {
       const energyNeededToSetpoint = (tankMass * CP_WATER * (setpoint - currentTemp)) / 1000;
@@ -101,10 +116,10 @@ export function runSimulation(project: Project, system: System): HourlySimResult
       }
     }
 
-    // 4. Perdas Térmicas Estáticas
+    // 4. Perdas Térmicas Estáticas (Depósito)
     const q_loss_kWh = isInstantaneous ? 0 : (system.storage.lossFactor * Math.max(0, currentTemp - t_ambient)) / 1000;
 
-    // 5. Balanço Final de Energia
+    // 5. Balanço Final
     const deltaE = q_input_kWh + q_solar_kWh - q_demand_kWh - q_loss_kWh;
     const deltaT = deltaE / (tankMass * CP_WATER / 1000);
     
@@ -120,7 +135,7 @@ export function runSimulation(project: Project, system: System): HourlySimResult
       demand_L: hourlyDemand_L,
       temp_tank: currentTemp,
       t_required: t_required,
-      t_delivered: t_delivered,
+      t_delivered: system.hasMixingValve ? Math.min(currentTemp, t_required) : currentTemp,
       consumed_elec_kWh: elec_cons,
       consumed_gas_kWh: gas_cons,
       solar_gain_kWh: q_solar_kWh,

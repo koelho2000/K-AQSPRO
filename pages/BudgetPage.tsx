@@ -171,12 +171,12 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ project, setProject }) => {
   const handleExport = (type: 'pdf' | 'html' | 'word') => {
     if (type === 'pdf') { window.print(); return; }
     const htmlContent = budgetRef.current?.innerHTML || "";
-    const fullHtml = `<html><head><meta charset="utf-8">${BUDGET_EXPORT_STYLES}</head><body><div class="header"><h1>Orçamento Técnico - ${project.admin.client || 'Sem Nome'}</h1><p>${project.admin.installation || 'Local não definido'}</p></div>${htmlContent}</body></html>`;
+    const fullHtml = `<html><head><meta charset="utf-8">${BUDGET_EXPORT_STYLES}</head><body><div class="header"><h1>Orçamento Técnico - ${project.admin.projectDesignation || 'Sem Nome'}</h1><p>${project.admin.buildingName || ''} - ${project.admin.address || ''}</p></div>${htmlContent}</body></html>`;
     const blob = new Blob([fullHtml], { type: type === 'html' ? 'text/html' : 'application/msword' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Orcamento_KAQSPRO_${project.admin.client || 'Project'}.${type === 'html' ? 'html' : 'doc'}`;
+    link.download = `Orcamento_KAQSPRO_${project.admin.projectDesignation || 'Project'}.${type === 'html' ? 'html' : 'doc'}`;
     link.click();
   };
 
