@@ -18,6 +18,8 @@ export enum ModuleType {
 export interface ClientData {
   buildingName: string;
   projectDesignation: string;
+  projectNumber: string;
+  variantName: string;
   address: string;
   client: string;
   technician: string;
@@ -62,11 +64,14 @@ export interface Equipment {
   power?: number; // kW
   area?: number; // m2
   opticalEfficiency?: number; // η0
+  isExisting?: boolean; // If true, equipment won't be budgeted in proposed system
+  maxOutputTemp?: number; // Maximum temperature the equipment can reach
 }
 
 export interface Storage {
   volume: number; // Liters
   lossFactor: number; // W/K
+  isExisting?: boolean; // New property to exclude from proposed budget
 }
 
 export interface System {

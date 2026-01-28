@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Project, CompanyInfo } from '../types';
-import { Building2, FileText, MapPin, User, Briefcase, Globe, Mail, Phone, Hash, ShieldCheck } from 'lucide-react';
+import { Building2, FileText, MapPin, User, Briefcase, Globe, Mail, Phone, Hash, ShieldCheck, Tag, Fingerprint } from 'lucide-react';
 
 interface AdminPageProps {
   project: Project;
@@ -64,6 +64,32 @@ const AdminPage: React.FC<AdminPageProps> = ({ project, setProject }) => {
                 value={project.admin.projectDesignation}
                 onChange={handleAdminChange}
                 placeholder="Ex: Renovação Central Térmica AQS"
+                className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none transition-all font-bold text-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                <Fingerprint size={12}/> Nº de Projeto
+              </label>
+              <input 
+                type="text" 
+                name="projectNumber"
+                value={project.admin.projectNumber}
+                onChange={handleAdminChange}
+                placeholder="Ex: FO_00_00"
+                className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none transition-all font-bold text-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                <Tag size={12}/> Nome da Variante
+              </label>
+              <input 
+                type="text" 
+                name="variantName"
+                value={project.admin.variantName}
+                onChange={handleAdminChange}
+                placeholder="Ex: Solução Bomba de Calor"
                 className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none transition-all font-bold text-slate-800"
               />
             </div>

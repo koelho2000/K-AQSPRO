@@ -50,9 +50,24 @@ const App: React.FC = () => {
     const data = JSON.stringify(project);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
+    
+    // Gerar nome do ficheiro: NomeObra_NomeProjeto_Variante_Data.json
+    const date = new Date();
+    const dateStr = date.getFullYear().toString() + 
+                    (date.getMonth() + 1).toString().padStart(2, '0') + 
+                    date.getDate().toString().padStart(2, '0');
+    
+    const obra = project.admin.buildingName || 'Obra';
+    const designacao = project.admin.projectDesignation || 'Projeto';
+    const variante = project.admin.variantName || 'Variante';
+    
+    const sanitize = (s: string) => s.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').toUpperCase();
+    
+    const fileName = `${sanitize(obra)}_${sanitize(designacao)}_${sanitize(variante)}_${dateStr}.json`;
+
     const link = document.createElement('a');
     link.href = url;
-    link.download = `KAQSPRO_${project.admin.client || 'Projeto'}.json`;
+    link.download = fileName;
     link.click();
   };
 

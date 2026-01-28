@@ -90,6 +90,8 @@ export const INITIAL_PROJECT: Project = {
   admin: { 
     buildingName: '', 
     projectDesignation: '', 
+    projectNumber: 'FO_00_00',
+    variantName: '',
     address: '', 
     client: '', 
     technician: 'José Coelho' 
@@ -109,7 +111,7 @@ export const INITIAL_PROJECT: Project = {
     name: 'Sistema Base',
     storage: { volume: 200, lossFactor: 1.5 },
     equipments: [
-      { type: 'BOILER', name: 'Esquentador Gás', efficiency: 0.85, power: 1 }
+      { type: 'BOILER', name: 'Esquentador Gás', efficiency: 0.85, power: 1, maxOutputTemp: 60 }
     ],
     hasMixingValve: false,
     hasStorage: true
@@ -118,8 +120,8 @@ export const INITIAL_PROJECT: Project = {
     name: 'Sistema Eficiente',
     storage: { volume: 300, lossFactor: 1.2 },
     equipments: [
-      { type: 'HP', name: 'Bomba de Calor', cop: 3.5, power: 2 },
-      { type: 'SOLAR', name: 'Painéis Solares', area: 4, opticalEfficiency: 0.75 }
+      { type: 'HP', name: 'Bomba de Calor', cop: 3.5, power: 2, maxOutputTemp: 55 },
+      { type: 'SOLAR', name: 'Painéis Solares', area: 4, opticalEfficiency: 0.75, maxOutputTemp: 80 }
     ],
     hasMixingValve: true,
     hasStorage: true

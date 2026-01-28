@@ -98,8 +98,12 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ project, setProject }) => {
     const newItems: BudgetItem[] = [];
     const timestamp = Date.now();
     
-    // I - Equipamentos de Produção
-    targetSystem.equipments.forEach((eq, idx) => {
+    // I - Equipamentos de Produção (Filtrar existentes)
+    const budgetableEquips = type === 'proposed' 
+      ? targetSystem.equipments.filter(e => !e.isExisting) 
+      : targetSystem.equipments;
+
+    budgetableEquips.forEach((eq, idx) => {
       const unitPrice = estimateEquipmentPrice(eq);
       newItems.push({
         id: `eq-${idx}-${timestamp}`,
@@ -111,17 +115,21 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ project, setProject }) => {
       });
     });
 
-    // II - Acumulação
+    // II - Acumulação (Filtrar se for existente no sistema proposto)
     if (targetSystem.hasStorage !== false && targetSystem.storage.volume > 0) {
-      const storagePrice = estimateStoragePrice(targetSystem.storage.volume);
-      newItems.push({
-        id: `st-${timestamp}`,
-        category: 'II - ACUMULAÇÃO E INÉRCIA',
-        description: `[${type.toUpperCase()}] Depósito Acumulador - ${targetSystem.storage.volume} Litros`,
-        quantity: 1,
-        unit: 'un',
-        unitPrice: Math.round(storagePrice / 10) * 10
-      });
+      const shouldBudgetStorage = type === 'existing' || !targetSystem.storage.isExisting;
+      
+      if (shouldBudgetStorage) {
+        const storagePrice = estimateStoragePrice(targetSystem.storage.volume);
+        newItems.push({
+          id: `st-${timestamp}`,
+          category: 'II - ACUMULAÇÃO E INÉRCIA',
+          description: `[${type.toUpperCase()}] Depósito Acumulador - ${targetSystem.storage.volume} Litros`,
+          quantity: 1,
+          unit: 'un',
+          unitPrice: Math.round(storagePrice / 10) * 10
+        });
+      }
     }
 
     // III - Hidráulica (Valores de mercado base)
